@@ -1,51 +1,57 @@
-import subprocess
+import subprocess, os
 from pathlib import Path
 from glob import glob
+from subprocess import Popen, PIPE, STDOUT, DEVNULL
 
 
-# song_folders = Path("D:/UltraStarSongsAnimuxDe/")
-song_folders = Path("D:/UltraStarDownloadTest/")
-with open("debug.txt", 'w') as f_debug:
-    for folder in [x for x in song_folders.iterdir() if x.is_dir]:
+song_folders = Path("D:/UltraStarSongsAnimuxDe/")
+# song_folders = Path("D:/UltraStarDownloadTest/")
+with open("debug.txt", 'w', encoding="utf-8") as f_debug:
+    all_folders = [x for x in song_folders.iterdir() if x.is_dir]
+    for folder_index, folder in enumerate(all_folders):
         folder_song_downloaded = False
         txt_file = list(folder.glob("*.txt"))[0]
-        with open(txt_file) as f:
-            lines = f.read().splitlines()
-            video_info = [x for x in lines if x.startswith("#VIDEO")][0]
-            video_info = video_info[7:]
-            video_info = video_info.split(",")
-            for info in video_info:
-                info_type = info[0]
-                # f_debug.write(info + "\n")
-                info_content = info[len(info_type)+1:]
-                if info_type == "v" or info_type == "a":
-                    folder_song_downloaded = True
-                    if len(info_content) == 11:
-                        # print(folder, info_content)
-                        # f_debug.write(info_type + " = " + info_content + "\n")
-                        # youtube_link = f"https://www.youtube.com/watch?v={info_content}"
+        song_name = folder.name
+        print(f"{folder_index}: entering: {song_name}. ", end=' ')
+        try:
+            with open(txt_file, 'r+', encoding="windows-1252") as f:
+                lines = f.read().splitlines()
+                video_info_index, video_info = [(i,x) for (i,x) in enumerate(lines) if x.startswith("#VIDEO")][0]
 
-                        video_command = f"yt-dlp -o \"{folder}\\{folder.name}.mp4\" --remux-video mp4 {info_content}"
-                        audio_command = f"yt-dlp -o \"{folder}\\{folder.name}.mp4\" --extract-audio --audio-format mp3 {info_content}"
-                        # thumbnail_command = f"yt-dlp -o \"{folder}\\{folder.name}.mp4\" --write-thumbnail --skip-download {info_content}"
-                        print(video_command)
-                        print(audio_command)
-                        # print(folder.name)
-                        # print(youtube_link)
+                video_info = video_info[7:]
+                video_info = video_info.split(",")
+                for info in video_info:
+                    info_type = info[0]
+                    info_content = info[len(info_type)+1:]
+                    if info_type == "v" or info_type == "a":
+                        if len(info_content) == 11:
+                            yt_dlp_command = f"yt-dlp -o \"{folder}\\{song_name}.mp4\" --remux-video mp4 {info_content}"
+                            yt_dlp_download_audio = f"yt-dlp -o \"{folder}\\{song_name}.mp3\" -f bestaudio {info_content}"
+                            # extract_audio_command = f"ffmpeg -i \"{folder}\\{song_name}.mp4\" -q:a 0 -map a \"{folder}\\{song_name}.mp3\""
+                            # print(yt_dlp_command)
+                            # print(yt_dlp_download_audio)
+                            # break
+                            print("downloading. ", end=" ", flush=True)
+                            subprocess.run(yt_dlp_command, stdout=DEVNULL, stderr=STDOUT)
+                            print("downloading audio. ", end=" ", flush=True)
+                            subprocess.run(yt_dlp_download_audio, stdout=DEVNULL, stderr=STDOUT)
 
-                        # You have to change line from
-                        # #VIDEO:co=https://static.wikia.nocookie.net/love-live/images/b/ba/Bokura_wa_Ima_no_Naka_de_-_Cover.jpg
-                        # to
-                        # #VIDEO:µ’s - Bokura wa Ima no Naka de.mp4
+                            new_video_info = f"#VIDEO:{song_name}.mp4"
+                            lines[video_info_index] = new_video_info
+                            new_thumbnail_info = f"#COVER:{song_name} [CO].jpg"
+                            lines.insert(video_info_index, new_thumbnail_info)
 
+                            f.seek(0)
+                            f.writelines(line + "\n" for line in lines)
+                            f.truncate()
+                            folder_song_downloaded = True
+                            print("finished.")
 
-                        #INSERT cover file [CO] file to txt
-                        pass
-                    else:
-                        pass
-                        # print("!!!not proper format - ",folder, info_content)
-        if not folder_song_downloaded:
-            print("!!!!!!not downloaded - " + str(folder))
-
-        
-    
+                        else:
+                            print("\nNot proper format - ", info_content)
+            if not folder_song_downloaded:
+                print(f"\nSong couldn't be downloaded")
+        except Exception as e:
+            print(f"\nCouldn't download {song_name}")
+            print(e)
+            f_debug.write(str(e))
